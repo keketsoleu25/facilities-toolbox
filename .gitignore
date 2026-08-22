@@ -1,0 +1,9 @@
+recognition-service/.venv/
+**/__pycache__/
+*.pyc
+**/bin/
+**/obj/
+.env
+.env.*
+!.env.example
+.vscode/
