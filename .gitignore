@@ -7,3 +7,5 @@ recognition-service/.venv/
 .env.*
 !.env.example
 .vscode/
+facilities-api/appsettings.Development.json
+facilities-api/appsettings.Development.json
