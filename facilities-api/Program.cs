@@ -64,6 +64,7 @@ builder.Services.AddDbContext<FacilitiesDbContext>(
 
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<OperationalAlertsService>();
 
 
 // --------------------------------------------------
