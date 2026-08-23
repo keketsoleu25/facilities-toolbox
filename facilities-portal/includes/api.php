@@ -19,11 +19,19 @@
 // --------------------------------------------------
 //
 // Local development currently runs ASP.NET Core on
-// port 5209. This can later move into environment
-// configuration when the product is deployed.
+// port 5209.
+//
+// We use the explicit IPv4 loopback address instead of
+// "localhost" because some Windows/PHP combinations can
+// resolve localhost to IPv6 first while Kestrel is only
+// listening on IPv4. Using 127.0.0.1 keeps portal-to-API
+// communication deterministic during local development.
+//
+// This can later move into environment configuration when
+// the product is deployed.
 // --------------------------------------------------
 
-const FACILITIES_API_BASE_URL = "http://localhost:5209";
+const FACILITIES_API_BASE_URL = "http://127.0.0.1:5209";
 
 
 // --------------------------------------------------
