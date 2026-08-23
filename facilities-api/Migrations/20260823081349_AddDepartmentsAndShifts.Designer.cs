@@ -3,6 +3,7 @@ using System;
 using FacilitiesApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace facilities_api.Migrations
 {
     [DbContext(typeof(FacilitiesDbContext))]
-    partial class FacilitiesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260823081349_AddDepartmentsAndShifts")]
+    partial class AddDepartmentsAndShifts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,55 +24,6 @@ namespace facilities_api.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("FacilitiesApi.Models.Asset", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Active")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("AssetCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("BuildingId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("LocationNote")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("SerialNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("SiteId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetCode")
-                        .IsUnique();
-
-                    b.HasIndex("BuildingId");
-
-                    b.HasIndex("SiteId");
-
-                    b.ToTable("Assets");
-                });
 
             modelBuilder.Entity("FacilitiesApi.Models.AttendanceRecord", b =>
                 {
@@ -221,96 +175,6 @@ namespace facilities_api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("FacilitiesApi.Models.Inspection", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssetId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("InspectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("InspectionCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("InspectorEmployeeId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Result")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetId");
-
-                    b.HasIndex("InspectionCode")
-                        .IsUnique();
-
-                    b.HasIndex("InspectorEmployeeId");
-
-                    b.ToTable("Inspections");
-                });
-
-            modelBuilder.Entity("FacilitiesApi.Models.MaintenanceRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssetId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ReportedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ReportedByEmployeeId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("RequestCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetId");
-
-                    b.HasIndex("ReportedByEmployeeId");
-
-                    b.HasIndex("RequestCode")
-                        .IsUnique();
-
-                    b.ToTable("MaintenanceRequests");
-                });
-
             modelBuilder.Entity("FacilitiesApi.Models.Shift", b =>
                 {
                     b.Property<int>("Id")
@@ -412,68 +276,6 @@ namespace facilities_api.Migrations
                     b.ToTable("Sites");
                 });
 
-            modelBuilder.Entity("FacilitiesApi.Models.WorkOrder", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AssignedEmployeeId")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("MaintenanceRequestId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("WorkOrderCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedEmployeeId");
-
-                    b.HasIndex("MaintenanceRequestId");
-
-                    b.HasIndex("WorkOrderCode")
-                        .IsUnique();
-
-                    b.ToTable("WorkOrders");
-                });
-
-            modelBuilder.Entity("FacilitiesApi.Models.Asset", b =>
-                {
-                    b.HasOne("FacilitiesApi.Models.Building", "Building")
-                        .WithMany()
-                        .HasForeignKey("BuildingId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("FacilitiesApi.Models.Site", "Site")
-                        .WithMany()
-                        .HasForeignKey("SiteId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Building");
-
-                    b.Navigation("Site");
-                });
-
             modelBuilder.Entity("FacilitiesApi.Models.AttendanceRecord", b =>
                 {
                     b.HasOne("FacilitiesApi.Models.Employee", "Employee")
@@ -524,44 +326,6 @@ namespace facilities_api.Migrations
                     b.Navigation("DepartmentRecord");
                 });
 
-            modelBuilder.Entity("FacilitiesApi.Models.Inspection", b =>
-                {
-                    b.HasOne("FacilitiesApi.Models.Asset", "Asset")
-                        .WithMany("Inspections")
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FacilitiesApi.Models.Employee", "InspectorEmployee")
-                        .WithMany()
-                        .HasForeignKey("InspectorEmployeeId")
-                        .HasPrincipalKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Asset");
-
-                    b.Navigation("InspectorEmployee");
-                });
-
-            modelBuilder.Entity("FacilitiesApi.Models.MaintenanceRequest", b =>
-                {
-                    b.HasOne("FacilitiesApi.Models.Asset", "Asset")
-                        .WithMany("MaintenanceRequests")
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FacilitiesApi.Models.Employee", "ReportedByEmployee")
-                        .WithMany()
-                        .HasForeignKey("ReportedByEmployeeId")
-                        .HasPrincipalKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Asset");
-
-                    b.Navigation("ReportedByEmployee");
-                });
-
             modelBuilder.Entity("FacilitiesApi.Models.ShiftAssignment", b =>
                 {
                     b.HasOne("FacilitiesApi.Models.Employee", "Employee")
@@ -582,32 +346,6 @@ namespace facilities_api.Migrations
                     b.Navigation("Shift");
                 });
 
-            modelBuilder.Entity("FacilitiesApi.Models.WorkOrder", b =>
-                {
-                    b.HasOne("FacilitiesApi.Models.Employee", "AssignedEmployee")
-                        .WithMany()
-                        .HasForeignKey("AssignedEmployeeId")
-                        .HasPrincipalKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("FacilitiesApi.Models.MaintenanceRequest", "MaintenanceRequest")
-                        .WithMany("WorkOrders")
-                        .HasForeignKey("MaintenanceRequestId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AssignedEmployee");
-
-                    b.Navigation("MaintenanceRequest");
-                });
-
-            modelBuilder.Entity("FacilitiesApi.Models.Asset", b =>
-                {
-                    b.Navigation("Inspections");
-
-                    b.Navigation("MaintenanceRequests");
-                });
-
             modelBuilder.Entity("FacilitiesApi.Models.Department", b =>
                 {
                     b.Navigation("Employees");
@@ -618,11 +356,6 @@ namespace facilities_api.Migrations
                     b.Navigation("AttendanceRecords");
 
                     b.Navigation("ShiftAssignments");
-                });
-
-            modelBuilder.Entity("FacilitiesApi.Models.MaintenanceRequest", b =>
-                {
-                    b.Navigation("WorkOrders");
                 });
 
             modelBuilder.Entity("FacilitiesApi.Models.Shift", b =>
