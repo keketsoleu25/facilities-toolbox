@@ -13,10 +13,12 @@ namespace FacilitiesApi.Data;
 // - Sites
 // - Buildings
 // - Departments
-// - Shifts
-// - ShiftAssignments
-// - Employees
-// - AttendanceRecords
+// - Shifts / ShiftAssignments
+// - Employees / AttendanceRecords
+// - Assets
+// - MaintenanceRequests
+// - WorkOrders
+// - Inspections
 // --------------------------------------------------
 
 public class FacilitiesDbContext : DbContext
@@ -31,6 +33,13 @@ public class FacilitiesDbContext : DbContext
     public DbSet<Site> Sites => Set<Site>();
     public DbSet<Building> Buildings => Set<Building>();
     public DbSet<Department> Departments => Set<Department>();
+
+    // Asset and maintenance operations tables.
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<MaintenanceRequest> MaintenanceRequests =>
+        Set<MaintenanceRequest>();
+    public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
+    public DbSet<Inspection> Inspections => Set<Inspection>();
 
     // Workforce scheduling tables.
     public DbSet<Shift> Shifts => Set<Shift>();
@@ -54,10 +63,7 @@ public class FacilitiesDbContext : DbContext
 
         modelBuilder.Entity<Site>(site =>
         {
-            site
-                .HasIndex(item => item.SiteCode)
-                .IsUnique();
-
+            site.HasIndex(item => item.SiteCode).IsUnique();
             site.Property(item => item.SiteCode).IsRequired();
             site.Property(item => item.Name).IsRequired();
         });
@@ -68,10 +74,7 @@ public class FacilitiesDbContext : DbContext
 
         modelBuilder.Entity<Building>(building =>
         {
-            building
-                .HasIndex(item => item.BuildingCode)
-                .IsUnique();
-
+            building.HasIndex(item => item.BuildingCode).IsUnique();
             building.Property(item => item.BuildingCode).IsRequired();
             building.Property(item => item.Name).IsRequired();
 
@@ -88,15 +91,10 @@ public class FacilitiesDbContext : DbContext
 
         modelBuilder.Entity<Department>(department =>
         {
-            department
-                .HasIndex(item => item.DepartmentCode)
-                .IsUnique();
-
+            department.HasIndex(item => item.DepartmentCode).IsUnique();
             department.Property(item => item.DepartmentCode).IsRequired();
             department.Property(item => item.Name).IsRequired();
 
-            // A department may be associated with a site,
-            // a building, both, or neither during migration.
             department
                 .HasOne(item => item.Site)
                 .WithMany()
@@ -111,15 +109,106 @@ public class FacilitiesDbContext : DbContext
         });
 
         // --------------------------------------------------
+        // Asset configuration
+        // --------------------------------------------------
+
+        modelBuilder.Entity<Asset>(asset =>
+        {
+            asset.HasIndex(item => item.AssetCode).IsUnique();
+            asset.Property(item => item.AssetCode).IsRequired();
+            asset.Property(item => item.Name).IsRequired();
+
+            asset
+                .HasOne(item => item.Site)
+                .WithMany()
+                .HasForeignKey(item => item.SiteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            asset
+                .HasOne(item => item.Building)
+                .WithMany()
+                .HasForeignKey(item => item.BuildingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // --------------------------------------------------
+        // Maintenance request configuration
+        // --------------------------------------------------
+
+        modelBuilder.Entity<MaintenanceRequest>(request =>
+        {
+            request.HasIndex(item => item.RequestCode).IsUnique();
+            request.Property(item => item.RequestCode).IsRequired();
+            request.Property(item => item.Title).IsRequired();
+
+            request
+                .HasOne(item => item.Asset)
+                .WithMany(asset => asset.MaintenanceRequests)
+                .HasForeignKey(item => item.AssetId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            request
+                .HasOne(item => item.ReportedByEmployee)
+                .WithMany()
+                .HasForeignKey(item => item.ReportedByEmployeeId)
+                .HasPrincipalKey(employee => employee.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // --------------------------------------------------
+        // Work order configuration
+        // --------------------------------------------------
+
+        modelBuilder.Entity<WorkOrder>(workOrder =>
+        {
+            workOrder.HasIndex(item => item.WorkOrderCode).IsUnique();
+            workOrder.Property(item => item.WorkOrderCode).IsRequired();
+            workOrder.Property(item => item.Title).IsRequired();
+
+            workOrder
+                .HasOne(item => item.MaintenanceRequest)
+                .WithMany(request => request.WorkOrders)
+                .HasForeignKey(item => item.MaintenanceRequestId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            workOrder
+                .HasOne(item => item.AssignedEmployee)
+                .WithMany()
+                .HasForeignKey(item => item.AssignedEmployeeId)
+                .HasPrincipalKey(employee => employee.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // --------------------------------------------------
+        // Inspection configuration
+        // --------------------------------------------------
+
+        modelBuilder.Entity<Inspection>(inspection =>
+        {
+            inspection.HasIndex(item => item.InspectionCode).IsUnique();
+            inspection.Property(item => item.InspectionCode).IsRequired();
+
+            inspection
+                .HasOne(item => item.Asset)
+                .WithMany(asset => asset.Inspections)
+                .HasForeignKey(item => item.AssetId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            inspection
+                .HasOne(item => item.InspectorEmployee)
+                .WithMany()
+                .HasForeignKey(item => item.InspectorEmployeeId)
+                .HasPrincipalKey(employee => employee.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // --------------------------------------------------
         // Shift configuration
         // --------------------------------------------------
 
         modelBuilder.Entity<Shift>(shift =>
         {
-            shift
-                .HasIndex(item => item.ShiftCode)
-                .IsUnique();
-
+            shift.HasIndex(item => item.ShiftCode).IsUnique();
             shift.Property(item => item.ShiftCode).IsRequired();
             shift.Property(item => item.Name).IsRequired();
         });
@@ -130,26 +219,17 @@ public class FacilitiesDbContext : DbContext
 
         modelBuilder.Entity<Employee>(employee =>
         {
-            employee
-                .HasIndex(item => item.EmployeeId)
-                .IsUnique();
-
-            employee
-                .HasAlternateKey(item => item.EmployeeId);
-
+            employee.HasIndex(item => item.EmployeeId).IsUnique();
+            employee.HasAlternateKey(item => item.EmployeeId);
             employee.Property(item => item.EmployeeId).IsRequired();
             employee.Property(item => item.Name).IsRequired();
 
-            // Nullable during the v0.2 -> v0.3 migration so
-            // existing employee records remain valid.
             employee
                 .HasOne(item => item.DepartmentRecord)
                 .WithMany(department => department.Employees)
                 .HasForeignKey(item => item.DepartmentId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Historical attendance already references EMP001,
-            // so the development employee remains seeded.
             employee.HasData(
                 new Employee
                 {
@@ -185,8 +265,6 @@ public class FacilitiesDbContext : DbContext
                 .HasForeignKey(item => item.ShiftId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Prevent duplicate assignments starting on the same
-            // date for the same employee and shift.
             assignment
                 .HasIndex(item => new
                 {
