@@ -1,7 +1,9 @@
+using FacilitiesApi.Configuration;
 using FacilitiesApi.Data;
 using FacilitiesApi.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FacilitiesApi.Controllers;
 
@@ -19,10 +21,15 @@ namespace FacilitiesApi.Controllers;
 public class EmployeeProfilesController : ControllerBase
 {
     private readonly FacilitiesDbContext _database;
+    private readonly ShiftPolicyOptions _shiftPolicy;
 
-    public EmployeeProfilesController(FacilitiesDbContext database)
+    public EmployeeProfilesController(
+        FacilitiesDbContext database,
+        IOptions<ShiftPolicyOptions> shiftPolicy
+    )
     {
         _database = database;
+        _shiftPolicy = shiftPolicy.Value;
     }
 
     [HttpGet("{employeeId}")]
@@ -96,19 +103,15 @@ public class EmployeeProfilesController : ControllerBase
             openSession.HasValue;
 
         // --------------------------------------------------
-        // v0.2 shift punctuality rule
-        // --------------------------------------------------
-        //
-        // Temporary product default:
-        // - shift starts at 08:00
-        // - 15 minute grace period
-        //
-        // The next evolution can store these rules per site,
-        // department, role or employee in PostgreSQL.
+        // Configurable punctuality rule
         // --------------------------------------------------
 
-        var shiftStart = new TimeSpan(8, 0, 0);
-        const int graceMinutes = 15;
+        var shiftStart = ParseTime(
+            _shiftPolicy.StartTime,
+            new TimeSpan(8, 0, 0)
+        );
+
+        var graceMinutes = Math.Max(0, _shiftPolicy.GraceMinutes);
         var lateThreshold = shiftStart.Add(
             TimeSpan.FromMinutes(graceMinutes)
         );
@@ -127,7 +130,7 @@ public class EmployeeProfilesController : ControllerBase
             else
             {
                 punctualityStatus = "LATE";
-                minutesLate = (int) Math.Ceiling(
+                minutesLate = (int)Math.Ceiling(
                     (arrivalTime - lateThreshold).TotalMinutes
                 );
             }
@@ -157,7 +160,7 @@ public class EmployeeProfilesController : ControllerBase
                     2
                 )
                 : 0,
-            ShiftStart = "08:00",
+            ShiftStart = shiftStart.ToString(@"hh\:mm"),
             GraceMinutes = graceMinutes,
             PunctualityStatus = punctualityStatus,
             MinutesLate = minutesLate,
@@ -176,6 +179,13 @@ public class EmployeeProfilesController : ControllerBase
         };
 
         return Ok(response);
+    }
+
+    private static TimeSpan ParseTime(string value, TimeSpan fallback)
+    {
+        return TimeSpan.TryParse(value, out var parsed)
+            ? parsed
+            : fallback;
     }
 
     private static DateTime ConvertToSouthAfricaTime(
