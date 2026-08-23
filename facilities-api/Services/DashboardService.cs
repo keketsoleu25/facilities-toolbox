@@ -1,5 +1,6 @@
 using FacilitiesApi.Data;
 using FacilitiesApi.Dtos;
+using FacilitiesApi.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace FacilitiesApi.Services;
@@ -101,20 +102,21 @@ public class DashboardService
 
         var attendanceToday = attendance
             .Where(record =>
-                TimeZoneInfo.ConvertTimeFromUtc(
-                    DateTime.SpecifyKind(
-                        record.Timestamp,
-                        DateTimeKind.Utc
-                    ),
+                ConvertToSouthAfricaTime(
+                    record.Timestamp,
                     southAfricaZone
                 ).Date == today
             )
+            .OrderBy(record => record.Timestamp)
             .ToList();
 
-        var employeesSeenToday = attendanceToday
+        var employeesSeenTodayIds = attendanceToday
             .Select(record => record.EmployeeId)
             .Distinct()
-            .Count();
+            .ToHashSet();
+
+        var employeesSeenToday =
+            employeesSeenTodayIds.Count;
 
         var attendanceRate = activeEmployees.Count == 0
             ? 0
@@ -123,6 +125,173 @@ public class DashboardService
                 activeEmployees.Count,
                 1
             );
+
+        var absentToday = activeEmployees.Count(employee =>
+            !employeesSeenTodayIds.Contains(employee.EmployeeId)
+        );
+
+
+        // --------------------------------------------------
+        // Daily worked hours
+        // --------------------------------------------------
+        //
+        // Attendance events are paired in chronological order.
+        // Only completed IN -> OUT sessions are counted.
+        // An employee who is still clocked IN is intentionally
+        // excluded from completed worked hours until they OUT.
+        // --------------------------------------------------
+
+        var totalWorkedMinutes = 0.0;
+
+        foreach (
+            var employeeGroup in attendanceToday
+                .GroupBy(record => record.EmployeeId)
+        )
+        {
+            DateTime? openSession = null;
+
+            foreach (var record in employeeGroup)
+            {
+                var localTimestamp =
+                    ConvertToSouthAfricaTime(
+                        record.Timestamp,
+                        southAfricaZone
+                    );
+
+                if (record.Action == "IN")
+                {
+                    openSession = localTimestamp;
+                    continue;
+                }
+
+                if (
+                    record.Action == "OUT" &&
+                    openSession.HasValue &&
+                    localTimestamp >= openSession.Value
+                )
+                {
+                    totalWorkedMinutes +=
+                        (localTimestamp - openSession.Value)
+                        .TotalMinutes;
+
+                    openSession = null;
+                }
+            }
+        }
+
+        var totalHoursWorkedToday =
+            Math.Round(totalWorkedMinutes / 60.0, 1);
+
+
+        // --------------------------------------------------
+        // Average first arrival
+        // --------------------------------------------------
+
+        var firstArrivals = attendanceToday
+            .Where(record => record.Action == "IN")
+            .GroupBy(record => record.EmployeeId)
+            .Select(group =>
+                ConvertToSouthAfricaTime(
+                    group.First().Timestamp,
+                    southAfricaZone
+                )
+            )
+            .ToList();
+
+        var averageFirstArrival = "--";
+
+        if (firstArrivals.Count > 0)
+        {
+            var averageTicks =
+                (long) firstArrivals
+                    .Average(arrival => arrival.TimeOfDay.Ticks);
+
+            averageFirstArrival =
+                new TimeSpan(averageTicks)
+                    .ToString(@"hh\:mm");
+        }
+
+
+        // --------------------------------------------------
+        // Department health
+        // --------------------------------------------------
+
+        var departments = activeEmployees
+            .GroupBy(employee =>
+                string.IsNullOrWhiteSpace(employee.Department)
+                    ? "Unassigned"
+                    : employee.Department
+            )
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var departmentEmployees = group.ToList();
+
+                var seenToday = departmentEmployees.Count(employee =>
+                    employeesSeenTodayIds.Contains(employee.EmployeeId)
+                );
+
+                var departmentPresent =
+                    departmentEmployees.Count(employee =>
+                        latestByEmployee.TryGetValue(
+                            employee.EmployeeId,
+                            out var latest
+                        ) &&
+                        latest.Action == "IN"
+                    );
+
+                return new DashboardDepartmentItem
+                {
+                    Department = group.Key,
+                    ActiveEmployees = departmentEmployees.Count,
+                    SeenToday = seenToday,
+                    PresentNow = departmentPresent,
+                    AttendanceRate = departmentEmployees.Count == 0
+                        ? 0
+                        : Math.Round(
+                            seenToday * 100.0 /
+                            departmentEmployees.Count,
+                            1
+                        )
+                };
+            })
+            .ToList();
+
+
+        // --------------------------------------------------
+        // Seven-day attendance trend
+        // --------------------------------------------------
+
+        var trend = new List<DashboardTrendItem>();
+
+        for (var offset = 6; offset >= 0; offset--)
+        {
+            var date = today.AddDays(-offset);
+
+            var seenOnDate = attendance
+                .Where(record =>
+                    ConvertToSouthAfricaTime(
+                        record.Timestamp,
+                        southAfricaZone
+                    ).Date == date
+                )
+                .Select(record => record.EmployeeId)
+                .Distinct()
+                .Count();
+
+            trend.Add(new DashboardTrendItem
+            {
+                Date = date,
+                SeenEmployees = seenOnDate,
+                AttendanceRate = activeEmployees.Count == 0
+                    ? 0
+                    : Math.Round(
+                        seenOnDate * 100.0 /
+                        activeEmployees.Count,
+                        1
+                    )
+            });
+        }
 
 
         // --------------------------------------------------
@@ -140,11 +309,8 @@ public class DashboardService
                 Department = record.Employee?.Department
                     ?? string.Empty,
                 Action = record.Action,
-                Timestamp = TimeZoneInfo.ConvertTimeFromUtc(
-                    DateTime.SpecifyKind(
-                        record.Timestamp,
-                        DateTimeKind.Utc
-                    ),
+                Timestamp = ConvertToSouthAfricaTime(
+                    record.Timestamp,
                     southAfricaZone
                 )
             })
@@ -158,10 +324,34 @@ public class DashboardService
             ActiveEmployees = activeEmployees.Count,
             PresentNow = presentNow,
             ClockedOut = clockedOut,
+            AbsentToday = absentToday,
             AttendanceEventsToday = attendanceToday.Count,
             AttendanceRate = attendanceRate,
-            LatestActivity = latestActivity
+            TotalHoursWorkedToday = totalHoursWorkedToday,
+            AverageFirstArrival = averageFirstArrival,
+            LatestActivity = latestActivity,
+            Departments = departments,
+            AttendanceTrend = trend
         };
+    }
+
+
+    // --------------------------------------------------
+    // Convert one UTC database timestamp to South Africa
+    // --------------------------------------------------
+
+    private static DateTime ConvertToSouthAfricaTime(
+        DateTime timestamp,
+        TimeZoneInfo southAfricaZone
+    )
+    {
+        return TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(
+                timestamp,
+                DateTimeKind.Utc
+            ),
+            southAfricaZone
+        );
     }
 
 
