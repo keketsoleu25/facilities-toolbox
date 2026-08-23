@@ -95,6 +95,44 @@ public class EmployeeProfilesController : ControllerBase
             latestToday.Record.Action == "IN" &&
             openSession.HasValue;
 
+        // --------------------------------------------------
+        // v0.2 shift punctuality rule
+        // --------------------------------------------------
+        //
+        // Temporary product default:
+        // - shift starts at 08:00
+        // - 15 minute grace period
+        //
+        // The next evolution can store these rules per site,
+        // department, role or employee in PostgreSQL.
+        // --------------------------------------------------
+
+        var shiftStart = new TimeSpan(8, 0, 0);
+        const int graceMinutes = 15;
+        var lateThreshold = shiftStart.Add(
+            TimeSpan.FromMinutes(graceMinutes)
+        );
+
+        var punctualityStatus = "NOT_SEEN";
+        var minutesLate = 0;
+
+        if (firstArrival is not null)
+        {
+            var arrivalTime = firstArrival.LocalTimestamp.TimeOfDay;
+
+            if (arrivalTime <= lateThreshold)
+            {
+                punctualityStatus = "ON_TIME";
+            }
+            else
+            {
+                punctualityStatus = "LATE";
+                minutesLate = (int) Math.Ceiling(
+                    (arrivalTime - lateThreshold).TotalMinutes
+                );
+            }
+        }
+
         var response = new EmployeeProfileResponse
         {
             EmployeeId = employee.EmployeeId,
@@ -119,6 +157,10 @@ public class EmployeeProfilesController : ControllerBase
                     2
                 )
                 : 0,
+            ShiftStart = "08:00",
+            GraceMinutes = graceMinutes,
+            PunctualityStatus = punctualityStatus,
+            MinutesLate = minutesLate,
             RecentAttendance = records
                 .Take(20)
                 .Select(record => new EmployeeProfileAttendanceItem
