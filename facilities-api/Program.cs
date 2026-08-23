@@ -46,9 +46,6 @@ if (string.IsNullOrWhiteSpace(connectionString))
 //
 // UseNpgsql tells Entity Framework Core that
 // PostgreSQL is the database engine.
-//
-// FacilitiesDbContext can now be injected into
-// services such as AttendanceService.
 // --------------------------------------------------
 
 builder.Services.AddDbContext<FacilitiesDbContext>(
@@ -61,14 +58,12 @@ builder.Services.AddDbContext<FacilitiesDbContext>(
 // Register business services
 // --------------------------------------------------
 //
-// Scoped means one AttendanceService instance is
-// created per HTTP request.
-//
-// This works correctly with EF Core DbContext,
-// which is also scoped.
+// Each service is scoped to one HTTP request, matching
+// Entity Framework Core's DbContext lifetime.
 // --------------------------------------------------
 
 builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<DashboardService>();
 
 
 // --------------------------------------------------
