@@ -6,7 +6,7 @@ namespace FacilitiesApi.Dtos;
 //
 // Read-only operational profile used by the management
 // portal. It combines employee identity with today's
-// attendance state, shift punctuality and recent history.
+// attendance state, structured shift assignment and history.
 // --------------------------------------------------
 
 public class EmployeeProfileResponse
@@ -25,16 +25,18 @@ public class EmployeeProfileResponse
     public double OpenSessionHours { get; set; }
 
     // --------------------------------------------------
-    // v0.2 shift intelligence
+    // Shift intelligence
     // --------------------------------------------------
     //
-    // These defaults model a standard 08:00 start with a
-    // 15-minute grace period. They are intentionally kept
-    // explicit for now and can later move into site/shift
-    // configuration tables.
+    // v0.3 prefers the employee's active ShiftAssignment.
+    // When no assignment exists, the API falls back to the
+    // global shift policy so legacy employees still work.
     // --------------------------------------------------
 
+    public string ShiftCode { get; set; } = string.Empty;
+    public string ShiftName { get; set; } = "Default Shift Policy";
     public string ShiftStart { get; set; } = "08:00";
+    public string ShiftEnd { get; set; } = "17:00";
     public int GraceMinutes { get; set; } = 15;
     public string PunctualityStatus { get; set; } = "NOT_SEEN";
     public int MinutesLate { get; set; }
