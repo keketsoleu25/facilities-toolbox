@@ -1,86 +1,49 @@
 namespace FacilitiesApi.Models;
 
-
 // --------------------------------------------------
 // Employee
 // --------------------------------------------------
 //
-// Represents one employee registered in the
-// Facilities Toolbox.
+// Represents one employee registered in Facilities Toolbox.
 //
-// Attendance records will reference employees
-// instead of accepting arbitrary employee IDs.
+// v0.3 begins linking employees to real operational
+// structure while keeping the legacy Department string for
+// compatibility with existing portal and attendance code.
 // --------------------------------------------------
 
 public class Employee
 {
-    // --------------------------------------------------
-    // Internal database primary key
-    // --------------------------------------------------
-    //
-    // PostgreSQL generates this automatically.
-    //
-    // This is different from EmployeeId.
-    // --------------------------------------------------
-
     public int Id { get; set; }
 
+    // Business employee identifier shared by Python, C# and PHP.
+    public string EmployeeId { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
 
     // --------------------------------------------------
-    // Business employee identifier
-    // --------------------------------------------------
-    //
-    // This is the identifier used by:
-    //
-    // - Python facial recognition
-    // - C# attendance API
-    // - PHP facilities portal
-    //
-    // Example:
-    //
-    // EMP001
-    // --------------------------------------------------
-
-    public string EmployeeId { get; set; } =
-        string.Empty;
-
-
-    // Employee's display name.
-    public string Name { get; set; } =
-        string.Empty;
-
-
-    // Department within the organisation.
-    public string Department { get; set; } =
-        string.Empty;
-
-
-    // Employee's job role.
-    public string Role { get; set; } =
-        string.Empty;
-
-
-    // --------------------------------------------------
-    // Employee status
+    // Legacy department label
     // --------------------------------------------------
     //
-    // Inactive employees remain in the database
-    // for historical/audit purposes but cannot
-    // submit new attendance events.
+    // Kept temporarily so v0.2 screens and historical data do
+    // not break while v0.3 transitions to DepartmentId.
     // --------------------------------------------------
 
+    public string Department { get; set; } = string.Empty;
+
+    // Optional structured department relationship.
+    public int? DepartmentId { get; set; }
+    public Department? DepartmentRecord { get; set; }
+
+    public string Role { get; set; } = string.Empty;
+
+    // Inactive employees remain for historical/audit purposes.
     public bool Active { get; set; } = true;
 
+    public ICollection<AttendanceRecord> AttendanceRecords { get; set; } =
+        new List<AttendanceRecord>();
 
-    // --------------------------------------------------
-    // Navigation property
-    // --------------------------------------------------
-    //
-    // Gives EF Core access to all attendance
-    // records belonging to this employee.
-    // --------------------------------------------------
-
-    public ICollection<AttendanceRecord>
-        AttendanceRecords { get; set; } =
-            new List<AttendanceRecord>();
+    // Historical shift assignments let the system understand
+    // which schedule applied to an employee on a given date.
+    public ICollection<ShiftAssignment> ShiftAssignments { get; set; } =
+        new List<ShiftAssignment>();
 }
