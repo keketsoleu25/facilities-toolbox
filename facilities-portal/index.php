@@ -9,8 +9,7 @@
 // PostgreSQL through /api/dashboard.
 //
 // PHP is responsible only for presentation. Business
-// calculations such as present-now and attendance rate
-// remain in the ASP.NET Core service layer.
+// calculations remain in the ASP.NET Core service layer.
 // --------------------------------------------------
 
 require_once __DIR__ . "/includes/api.php";
@@ -41,42 +40,37 @@ $errorMessage =
 // --------------------------------------------------
 // Safe dashboard defaults
 // --------------------------------------------------
-//
-// Defaults keep the page renderable even when the API
-// is temporarily unavailable.
-// --------------------------------------------------
 
-$totalEmployees =
-    (int) ($dashboard["totalEmployees"] ?? 0);
-
-$activeEmployees =
-    (int) ($dashboard["activeEmployees"] ?? 0);
-
-$presentNow =
-    (int) ($dashboard["presentNow"] ?? 0);
-
-$clockedOut =
-    (int) ($dashboard["clockedOut"] ?? 0);
-
-$attendanceEventsToday =
-    (int) ($dashboard["attendanceEventsToday"] ?? 0);
-
-$attendanceRate =
-    (float) ($dashboard["attendanceRate"] ?? 0);
+$totalEmployees = (int) ($dashboard["totalEmployees"] ?? 0);
+$activeEmployees = (int) ($dashboard["activeEmployees"] ?? 0);
+$presentNow = (int) ($dashboard["presentNow"] ?? 0);
+$clockedOut = (int) ($dashboard["clockedOut"] ?? 0);
+$absentToday = (int) ($dashboard["absentToday"] ?? 0);
+$attendanceEventsToday = (int) ($dashboard["attendanceEventsToday"] ?? 0);
+$attendanceRate = (float) ($dashboard["attendanceRate"] ?? 0);
+$totalHoursWorkedToday = (float) ($dashboard["totalHoursWorkedToday"] ?? 0);
+$averageFirstArrival = (string) ($dashboard["averageFirstArrival"] ?? "--");
 
 $latestActivity =
     is_array($dashboard["latestActivity"] ?? null)
         ? $dashboard["latestActivity"]
         : [];
 
+$departments =
+    is_array($dashboard["departments"] ?? null)
+        ? $dashboard["departments"]
+        : [];
 
-// Keep the progress width within valid CSS bounds.
-$attendanceProgress =
-    max(0, min(100, $attendanceRate));
+$attendanceTrend =
+    is_array($dashboard["attendanceTrend"] ?? null)
+        ? $dashboard["attendanceTrend"]
+        : [];
+
+$attendanceProgress = max(0, min(100, $attendanceRate));
 
 
 // --------------------------------------------------
-// Format API timestamps for South African operators
+// Formatting helpers
 // --------------------------------------------------
 
 function formatActivityTime(?string $timestamp): string
@@ -97,6 +91,19 @@ function formatActivityTime(?string $timestamp): string
     }
 }
 
+function formatTrendDay(?string $date): string
+{
+    if (!$date) {
+        return "--";
+    }
+
+    try {
+        return (new DateTime($date))->format("D");
+    } catch (Exception $exception) {
+        return "--";
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -109,9 +116,6 @@ function formatActivityTime(?string $timestamp): string
 <body>
 <div class="app-shell">
 
-    <!-- --------------------------------------------------
-         Facilities product navigation
-    --------------------------------------------------- -->
     <aside class="sidebar">
         <div class="brand">
             <div class="brand-mark">FT</div>
@@ -129,7 +133,7 @@ function formatActivityTime(?string $timestamp): string
 
         <div class="nav-section-label">System</div>
         <nav>
-            <a class="nav-link" href="#">Departments</a>
+            <a class="nav-link" href="#department-health">Departments</a>
             <a class="nav-link" href="#">Settings</a>
         </nav>
 
@@ -140,15 +144,12 @@ function formatActivityTime(?string $timestamp): string
 
 
     <main class="main">
-        <!-- --------------------------------------------------
-             Command centre heading
-        --------------------------------------------------- -->
         <header class="topbar">
             <div>
                 <p class="eyebrow">Live Operations</p>
                 <h2 class="page-title">Command Centre</h2>
                 <p class="page-subtitle">
-                    A real-time view of workforce presence, attendance activity and facility readiness.
+                    Workforce presence, completed hours, attendance health and facility readiness in one live view.
                 </p>
             </div>
 
@@ -167,16 +168,36 @@ function formatActivityTime(?string $timestamp): string
         <?php endif; ?>
 
 
-        <!-- --------------------------------------------------
-             Primary facilities KPIs
-        --------------------------------------------------- -->
+        <!-- Primary real-time KPIs -->
         <section class="grid kpi-grid">
             <article class="kpi-card">
                 <p class="kpi-label">Present Now</p>
                 <p class="kpi-value"><?= $presentNow ?></p>
-                <p class="kpi-meta">Currently clocked into the facility</p>
+                <p class="kpi-meta">Active staff currently inside</p>
             </article>
 
+            <article class="kpi-card">
+                <p class="kpi-label">Attendance Rate</p>
+                <p class="kpi-value"><?= number_format($attendanceRate, 1) ?>%</p>
+                <p class="kpi-meta"><?= $attendanceEventsToday ?> events recorded today</p>
+            </article>
+
+            <article class="kpi-card">
+                <p class="kpi-label">Hours Completed</p>
+                <p class="kpi-value"><?= number_format($totalHoursWorkedToday, 1) ?>h</p>
+                <p class="kpi-meta">Completed IN → OUT sessions today</p>
+            </article>
+
+            <article class="kpi-card">
+                <p class="kpi-label">Average Arrival</p>
+                <p class="kpi-value"><?= htmlspecialchars($averageFirstArrival) ?></p>
+                <p class="kpi-meta">Average first clock-in today</p>
+            </article>
+        </section>
+
+
+        <!-- Secondary health KPIs -->
+        <section class="grid kpi-grid">
             <article class="kpi-card">
                 <p class="kpi-label">Active Employees</p>
                 <p class="kpi-value"><?= $activeEmployees ?></p>
@@ -186,27 +207,30 @@ function formatActivityTime(?string $timestamp): string
             <article class="kpi-card">
                 <p class="kpi-label">Clocked Out</p>
                 <p class="kpi-value"><?= $clockedOut ?></p>
-                <p class="kpi-meta">Active staff currently out</p>
+                <p class="kpi-meta">Active staff whose latest state is OUT</p>
             </article>
 
             <article class="kpi-card">
-                <p class="kpi-label">Attendance Rate</p>
-                <p class="kpi-value"><?= number_format($attendanceRate, 1) ?>%</p>
-                <p class="kpi-meta"><?= $attendanceEventsToday ?> events recorded today</p>
+                <p class="kpi-label">Absent Today</p>
+                <p class="kpi-value"><?= $absentToday ?></p>
+                <p class="kpi-meta">Active employees with no attendance event today</p>
+            </article>
+
+            <article class="kpi-card">
+                <p class="kpi-label">Coverage</p>
+                <p class="kpi-value"><?= $presentNow ?> / <?= $activeEmployees ?></p>
+                <p class="kpi-meta">Current live workforce coverage</p>
             </article>
         </section>
 
 
         <section class="grid dashboard-grid">
-            <!-- --------------------------------------------------
-                 Latest attendance activity
-            --------------------------------------------------- -->
             <article class="panel">
                 <div class="panel-header">
                     <div>
                         <h3 class="panel-title">Latest Activity</h3>
                         <p class="panel-description">
-                            Recent attendance events flowing through the recognition and API pipeline.
+                            Recent attendance events flowing through recognition, API and PostgreSQL.
                         </p>
                     </div>
                     <a class="action-link" href="attendance.php">View history</a>
@@ -220,11 +244,8 @@ function formatActivityTime(?string $timestamp): string
                     <div class="activity-list">
                         <?php foreach ($latestActivity as $activity): ?>
                             <?php
-                            $action =
-                                strtoupper($activity["action"] ?? "");
-
-                            $isOut =
-                                $action === "OUT";
+                            $action = strtoupper($activity["action"] ?? "");
+                            $isOut = $action === "OUT";
                             ?>
                             <div class="activity-item">
                                 <div class="activity-icon <?= $isOut ? "out" : "" ?>">
@@ -252,9 +273,6 @@ function formatActivityTime(?string $timestamp): string
             </article>
 
 
-            <!-- --------------------------------------------------
-                 Operational health and shortcuts
-            --------------------------------------------------- -->
             <aside class="grid">
                 <article class="panel">
                     <div class="panel-header">
@@ -266,7 +284,7 @@ function formatActivityTime(?string $timestamp): string
 
                     <div class="progress-card">
                         <div class="progress-row">
-                            <span style="color: var(--muted);">Coverage</span>
+                            <span style="color: var(--muted);">Seen Today</span>
                             <strong><?= number_format($attendanceRate, 1) ?>%</strong>
                         </div>
 
@@ -282,6 +300,13 @@ function formatActivityTime(?string $timestamp): string
                         <div class="progress-row">
                             <span style="color: var(--muted);">Currently Present</span>
                             <strong><?= $presentNow ?> / <?= $activeEmployees ?></strong>
+                        </div>
+                    </div>
+
+                    <div class="progress-card" style="margin-top:12px;">
+                        <div class="progress-row">
+                            <span style="color: var(--muted);">Absent Today</span>
+                            <strong><?= $absentToday ?></strong>
                         </div>
                     </div>
                 </article>
@@ -302,6 +327,85 @@ function formatActivityTime(?string $timestamp): string
                     </div>
                 </article>
             </aside>
+        </section>
+
+
+        <!-- Seven-day intelligence -->
+        <section class="panel" style="margin-top:18px;">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title">7-Day Attendance Signal</h3>
+                    <p class="panel-description">
+                        Daily percentage of active employees seen by the attendance system.
+                    </p>
+                </div>
+            </div>
+
+            <?php if (!$attendanceTrend): ?>
+                <div class="empty-state">No trend information available yet.</div>
+            <?php else: ?>
+                <div class="grid" style="grid-template-columns:repeat(7,minmax(70px,1fr));gap:10px;">
+                    <?php foreach ($attendanceTrend as $trendItem): ?>
+                        <?php
+                        $trendRate = (float) ($trendItem["attendanceRate"] ?? 0);
+                        $trendWidth = max(0, min(100, $trendRate));
+                        ?>
+                        <div class="progress-card" style="padding:12px;">
+                            <div class="progress-row" style="display:block;">
+                                <strong><?= htmlspecialchars(formatTrendDay($trendItem["date"] ?? null)) ?></strong>
+                                <div style="margin-top:5px;color:var(--muted);font-size:.78rem;">
+                                    <?= number_format($trendRate, 1) ?>%
+                                </div>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-bar" style="width:<?= $trendWidth ?>%;"></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </section>
+
+
+        <!-- Department intelligence -->
+        <section id="department-health" class="panel" style="margin-top:18px;">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title">Department Health</h3>
+                    <p class="panel-description">
+                        Attendance coverage and live presence by operational team.
+                    </p>
+                </div>
+            </div>
+
+            <?php if (!$departments): ?>
+                <div class="empty-state">No department information available yet.</div>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Department</th>
+                            <th>Active Staff</th>
+                            <th>Seen Today</th>
+                            <th>Present Now</th>
+                            <th>Attendance</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($departments as $department): ?>
+                            <tr>
+                                <td><strong><?= htmlspecialchars($department["department"] ?? "Unassigned") ?></strong></td>
+                                <td><?= (int) ($department["activeEmployees"] ?? 0) ?></td>
+                                <td><?= (int) ($department["seenToday"] ?? 0) ?></td>
+                                <td><?= (int) ($department["presentNow"] ?? 0) ?></td>
+                                <td><?= number_format((float) ($department["attendanceRate"] ?? 0), 1) ?>%</td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
         </section>
     </main>
 </div>
