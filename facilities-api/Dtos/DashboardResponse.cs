@@ -25,11 +25,24 @@ public class DashboardResponse
 
     public int ClockedOut { get; set; }
 
+    public int AbsentToday { get; set; }
+
     public int AttendanceEventsToday { get; set; }
 
     public double AttendanceRate { get; set; }
 
+    public double TotalHoursWorkedToday { get; set; }
+
+    public string AverageFirstArrival { get; set; } =
+        "--";
+
     public List<DashboardActivityItem> LatestActivity { get; set; } =
+        new();
+
+    public List<DashboardDepartmentItem> Departments { get; set; } =
+        new();
+
+    public List<DashboardTrendItem> AttendanceTrend { get; set; } =
         new();
 }
 
@@ -59,4 +72,45 @@ public class DashboardActivityItem
         string.Empty;
 
     public DateTime Timestamp { get; set; }
+}
+
+
+// --------------------------------------------------
+// DashboardDepartmentItem
+// --------------------------------------------------
+//
+// Department-level attendance health for the current
+// South African business day.
+// --------------------------------------------------
+
+public class DashboardDepartmentItem
+{
+    public string Department { get; set; } =
+        string.Empty;
+
+    public int ActiveEmployees { get; set; }
+
+    public int SeenToday { get; set; }
+
+    public int PresentNow { get; set; }
+
+    public double AttendanceRate { get; set; }
+}
+
+
+// --------------------------------------------------
+// DashboardTrendItem
+// --------------------------------------------------
+//
+// Seven-day attendance coverage history used by the
+// command centre trend strip.
+// --------------------------------------------------
+
+public class DashboardTrendItem
+{
+    public DateTime Date { get; set; }
+
+    public int SeenEmployees { get; set; }
+
+    public double AttendanceRate { get; set; }
 }
