@@ -5,13 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FacilitiesApi.Services;
 
-
 // --------------------------------------------------
 // DashboardService
 // --------------------------------------------------
 //
 // Converts raw employee and attendance records into
-// operational information for the management dashboard.
+// day-aware operational intelligence.
 // --------------------------------------------------
 
 public class DashboardService
@@ -23,16 +22,8 @@ public class DashboardService
         _database = database;
     }
 
-
-    // --------------------------------------------------
-    // Build current dashboard snapshot
-    // --------------------------------------------------
-
     public async Task<DashboardResponse> GetSnapshotAsync()
     {
-        // Load employees once because the current data set is
-        // small. We can optimise with dedicated aggregate SQL
-        // queries later when the product grows.
         var employees = await _database
             .Employees
             .AsNoTracking()
@@ -46,50 +37,9 @@ public class DashboardService
             .OrderByDescending(record => record.Timestamp)
             .ToListAsync();
 
-
-        // --------------------------------------------------
-        // Current attendance state
-        // --------------------------------------------------
-        //
-        // The newest event for each employee tells us whether
-        // that employee is currently IN or OUT.
-        // --------------------------------------------------
-
-        var latestByEmployee = attendance
-            .GroupBy(record => record.EmployeeId)
-            .ToDictionary(
-                group => group.Key,
-                group => group.First()
-            );
-
         var activeEmployees = employees
             .Where(employee => employee.Active)
             .ToList();
-
-        var presentNow = activeEmployees.Count(employee =>
-            latestByEmployee.TryGetValue(
-                employee.EmployeeId,
-                out var latest
-            ) &&
-            latest.Action == "IN"
-        );
-
-        var clockedOut = activeEmployees.Count(employee =>
-            latestByEmployee.TryGetValue(
-                employee.EmployeeId,
-                out var latest
-            ) &&
-            latest.Action == "OUT"
-        );
-
-
-        // --------------------------------------------------
-        // South African business day
-        // --------------------------------------------------
-        //
-        // Attendance records are stored in UTC, but the product
-        // is being built for South African facilities teams.
-        // --------------------------------------------------
 
         var southAfricaZone = GetSouthAfricaTimeZone();
 
@@ -99,6 +49,10 @@ public class DashboardService
         );
 
         var today = generatedAt.Date;
+
+        // --------------------------------------------------
+        // Today's events only
+        // --------------------------------------------------
 
         var attendanceToday = attendance
             .Where(record =>
@@ -115,48 +69,64 @@ public class DashboardService
             .Distinct()
             .ToHashSet();
 
-        var employeesSeenToday =
-            employeesSeenTodayIds.Count;
-
-        var attendanceRate = activeEmployees.Count == 0
-            ? 0
-            : Math.Round(
-                employeesSeenToday * 100.0 /
-                activeEmployees.Count,
-                1
+        // The latest event TODAY determines current state.
+        var latestTodayByEmployee = attendanceToday
+            .GroupBy(record => record.EmployeeId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last()
             );
+
+        var presentNow = activeEmployees.Count(employee =>
+            latestTodayByEmployee.TryGetValue(
+                employee.EmployeeId,
+                out var latest
+            ) &&
+            latest.Action == "IN"
+        );
+
+        var clockedOut = activeEmployees.Count(employee =>
+            latestTodayByEmployee.TryGetValue(
+                employee.EmployeeId,
+                out var latest
+            ) &&
+            latest.Action == "OUT"
+        );
 
         var absentToday = activeEmployees.Count(employee =>
             !employeesSeenTodayIds.Contains(employee.EmployeeId)
         );
 
+        var attendanceRate = activeEmployees.Count == 0
+            ? 0
+            : Math.Round(
+                employeesSeenTodayIds.Count * 100.0 /
+                activeEmployees.Count,
+                1
+            );
 
         // --------------------------------------------------
-        // Daily worked hours
-        // --------------------------------------------------
-        //
-        // Attendance events are paired in chronological order.
-        // Only completed IN -> OUT sessions are counted.
-        // An employee who is still clocked IN is intentionally
-        // excluded from completed worked hours until they OUT.
+        // Daily sessions and completed hours
         // --------------------------------------------------
 
         var totalWorkedMinutes = 0.0;
+        var openSessions = new List<DashboardOpenSessionItem>();
 
-        foreach (
-            var employeeGroup in attendanceToday
-                .GroupBy(record => record.EmployeeId)
-        )
+        foreach (var employee in activeEmployees)
         {
+            var employeeEvents = attendanceToday
+                .Where(record => record.EmployeeId == employee.EmployeeId)
+                .OrderBy(record => record.Timestamp)
+                .ToList();
+
             DateTime? openSession = null;
 
-            foreach (var record in employeeGroup)
+            foreach (var record in employeeEvents)
             {
-                var localTimestamp =
-                    ConvertToSouthAfricaTime(
-                        record.Timestamp,
-                        southAfricaZone
-                    );
+                var localTimestamp = ConvertToSouthAfricaTime(
+                    record.Timestamp,
+                    southAfricaZone
+                );
 
                 if (record.Action == "IN")
                 {
@@ -171,17 +141,42 @@ public class DashboardService
                 )
                 {
                     totalWorkedMinutes +=
-                        (localTimestamp - openSession.Value)
-                        .TotalMinutes;
+                        (localTimestamp - openSession.Value).TotalMinutes;
 
                     openSession = null;
                 }
+            }
+
+            // If the latest event today is IN, expose the open
+            // session so the command centre can warn operators.
+            if (
+                latestTodayByEmployee.TryGetValue(
+                    employee.EmployeeId,
+                    out var latestToday
+                ) &&
+                latestToday.Action == "IN" &&
+                openSession.HasValue
+            )
+            {
+                openSessions.Add(new DashboardOpenSessionItem
+                {
+                    EmployeeId = employee.EmployeeId,
+                    EmployeeName = employee.Name,
+                    Department = employee.Department,
+                    ClockedInAt = openSession.Value,
+                    OpenHours = Math.Round(
+                        Math.Max(
+                            0,
+                            (generatedAt - openSession.Value).TotalHours
+                        ),
+                        2
+                    )
+                });
             }
         }
 
         var totalHoursWorkedToday =
             Math.Round(totalWorkedMinutes / 60.0, 1);
-
 
         // --------------------------------------------------
         // Average first arrival
@@ -211,7 +206,6 @@ public class DashboardService
                     .ToString(@"hh\:mm");
         }
 
-
         // --------------------------------------------------
         // Department health
         // --------------------------------------------------
@@ -231,14 +225,13 @@ public class DashboardService
                     employeesSeenTodayIds.Contains(employee.EmployeeId)
                 );
 
-                var departmentPresent =
-                    departmentEmployees.Count(employee =>
-                        latestByEmployee.TryGetValue(
-                            employee.EmployeeId,
-                            out var latest
-                        ) &&
-                        latest.Action == "IN"
-                    );
+                var departmentPresent = departmentEmployees.Count(employee =>
+                    latestTodayByEmployee.TryGetValue(
+                        employee.EmployeeId,
+                        out var latest
+                    ) &&
+                    latest.Action == "IN"
+                );
 
                 return new DashboardDepartmentItem
                 {
@@ -256,7 +249,6 @@ public class DashboardService
                 };
             })
             .ToList();
-
 
         // --------------------------------------------------
         // Seven-day attendance trend
@@ -277,7 +269,9 @@ public class DashboardService
                 )
                 .Select(record => record.EmployeeId)
                 .Distinct()
-                .Count();
+                .Count(id => activeEmployees.Any(
+                    employee => employee.EmployeeId == id
+                ));
 
             trend.Add(new DashboardTrendItem
             {
@@ -293,11 +287,8 @@ public class DashboardService
             });
         }
 
-
-        // --------------------------------------------------
-        // Latest operational activity
-        // --------------------------------------------------
-
+        // Latest activity intentionally remains historical so
+        // operators still see the most recent system events.
         var latestActivity = attendance
             .Take(10)
             .Select(record => new DashboardActivityItem
@@ -316,7 +307,6 @@ public class DashboardService
             })
             .ToList();
 
-
         return new DashboardResponse
         {
             GeneratedAt = generatedAt,
@@ -329,16 +319,15 @@ public class DashboardService
             AttendanceRate = attendanceRate,
             TotalHoursWorkedToday = totalHoursWorkedToday,
             AverageFirstArrival = averageFirstArrival,
+            OpenSessionCount = openSessions.Count,
+            OpenSessions = openSessions
+                .OrderByDescending(session => session.OpenHours)
+                .ToList(),
             LatestActivity = latestActivity,
             Departments = departments,
             AttendanceTrend = trend
         };
     }
-
-
-    // --------------------------------------------------
-    // Convert one UTC database timestamp to South Africa
-    // --------------------------------------------------
 
     private static DateTime ConvertToSouthAfricaTime(
         DateTime timestamp,
@@ -346,23 +335,10 @@ public class DashboardService
     )
     {
         return TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(
-                timestamp,
-                DateTimeKind.Utc
-            ),
+            DateTime.SpecifyKind(timestamp, DateTimeKind.Utc),
             southAfricaZone
         );
     }
-
-
-    // --------------------------------------------------
-    // Resolve South Africa timezone cross-platform
-    // --------------------------------------------------
-    //
-    // Windows and Linux use different timezone identifiers.
-    // Supporting both keeps local Windows development and
-    // future Linux hosting compatible.
-    // --------------------------------------------------
 
     private static TimeZoneInfo GetSouthAfricaTimeZone()
     {
