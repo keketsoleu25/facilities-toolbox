@@ -3,15 +3,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FacilitiesApi.Data;
 
-
 // --------------------------------------------------
 // FacilitiesDbContext
 // --------------------------------------------------
 //
 // Central Entity Framework Core database context.
 //
-// Current tables:
+// v0.3 begins modelling the physical facilities layer:
 //
+// - Sites
+// - Buildings
 // - Employees
 // - AttendanceRecords
 // --------------------------------------------------
@@ -24,20 +25,14 @@ public class FacilitiesDbContext : DbContext
     {
     }
 
+    // Physical facilities tables.
+    public DbSet<Site> Sites => Set<Site>();
+    public DbSet<Building> Buildings => Set<Building>();
 
-    // Employee table.
-    public DbSet<Employee> Employees =>
-        Set<Employee>();
-
-
-    // Attendance table.
+    // Workforce tables.
+    public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<AttendanceRecord> AttendanceRecords =>
         Set<AttendanceRecord>();
-
-
-    // --------------------------------------------------
-    // Database model configuration
-    // --------------------------------------------------
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder
@@ -45,87 +40,101 @@ public class FacilitiesDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // --------------------------------------------------
+        // Site configuration
+        // --------------------------------------------------
+
+        modelBuilder.Entity<Site>(site =>
+        {
+            site
+                .HasIndex(item => item.SiteCode)
+                .IsUnique();
+
+            site
+                .Property(item => item.SiteCode)
+                .IsRequired();
+
+            site
+                .Property(item => item.Name)
+                .IsRequired();
+        });
+
+        // --------------------------------------------------
+        // Building configuration
+        // --------------------------------------------------
+
+        modelBuilder.Entity<Building>(building =>
+        {
+            building
+                .HasIndex(item => item.BuildingCode)
+                .IsUnique();
+
+            building
+                .Property(item => item.BuildingCode)
+                .IsRequired();
+
+            building
+                .Property(item => item.Name)
+                .IsRequired();
+
+            // A site can contain many buildings.
+            // Restrict deletion so a parent site cannot be
+            // removed while buildings still reference it.
+            building
+                .HasOne(item => item.Site)
+                .WithMany(site => site.Buildings)
+                .HasForeignKey(item => item.SiteId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         // --------------------------------------------------
         // Employee configuration
         // --------------------------------------------------
 
-        modelBuilder.Entity<Employee>(
-            employee =>
-            {
-                // EmployeeId must be unique.
-                employee
-                    .HasIndex(item => item.EmployeeId)
-                    .IsUnique();
+        modelBuilder.Entity<Employee>(employee =>
+        {
+            employee
+                .HasIndex(item => item.EmployeeId)
+                .IsUnique();
 
+            employee
+                .HasAlternateKey(item => item.EmployeeId);
 
-                // Tell EF that EmployeeId can be used
-                // as a principal key for relationships.
-                employee
-                    .HasAlternateKey(
-                        item => item.EmployeeId
-                    );
+            employee
+                .Property(item => item.EmployeeId)
+                .IsRequired();
 
+            employee
+                .Property(item => item.Name)
+                .IsRequired();
 
-                // Basic field requirements.
-                employee
-                    .Property(item => item.EmployeeId)
-                    .IsRequired();
-
-                employee
-                    .Property(item => item.Name)
-                    .IsRequired();
-
-
-                // --------------------------------------------------
-                // Seed development employee
-                // --------------------------------------------------
-                //
-                // EMP001 already exists in our historical
-                // attendance records.
-                //
-                // Seeding it before creating the foreign key
-                // allows those existing records to remain valid.
-                // --------------------------------------------------
-
-                employee.HasData(
-                    new Employee
-                    {
-                        Id = 1,
-                        EmployeeId = "EMP001",
-                        Name = "Development Employee",
-                        Department = "Facilities",
-                        Role = "Technician",
-                        Active = true
-                    }
-                );
-            }
-        );
-
+            // Historical attendance already references EMP001,
+            // so the development employee remains seeded.
+            employee.HasData(
+                new Employee
+                {
+                    Id = 1,
+                    EmployeeId = "EMP001",
+                    Name = "Development Employee",
+                    Department = "Facilities",
+                    Role = "Technician",
+                    Active = true
+                }
+            );
+        });
 
         // --------------------------------------------------
         // Attendance relationship
         // --------------------------------------------------
 
-        modelBuilder.Entity<AttendanceRecord>(
-            attendance =>
-            {
-                attendance
-                    .HasOne(record => record.Employee)
-                    .WithMany(
-                        employee =>
-                            employee.AttendanceRecords
-                    )
-                    .HasForeignKey(
-                        record => record.EmployeeId
-                    )
-                    .HasPrincipalKey(
-                        employee => employee.EmployeeId
-                    )
-                    .OnDelete(
-                        DeleteBehavior.Restrict
-                    );
-            }
-        );
+        modelBuilder.Entity<AttendanceRecord>(attendance =>
+        {
+            attendance
+                .HasOne(record => record.Employee)
+                .WithMany(employee => employee.AttendanceRecords)
+                .HasForeignKey(record => record.EmployeeId)
+                .HasPrincipalKey(employee => employee.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }
