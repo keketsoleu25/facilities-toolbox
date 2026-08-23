@@ -5,8 +5,8 @@
 // --------------------------------------------------
 //
 // Read-only drill-down into one employee's current
-// attendance state, today's worked time and recent
-// attendance history.
+// attendance state, today's worked time, punctuality
+// and recent attendance history.
 // --------------------------------------------------
 
 require_once __DIR__ . "/includes/api.php";
@@ -76,20 +76,13 @@ function profileTime(?string $timestamp): string
         <header class="topbar">
             <div>
                 <p class="eyebrow">Employee Intelligence</p>
-                <h2 class="page-title">
-                    <?= htmlspecialchars($profile["name"] ?? "Employee Profile") ?>
-                </h2>
+                <h2 class="page-title"><?= htmlspecialchars($profile["name"] ?? "Employee Profile") ?></h2>
                 <p class="page-subtitle">
                     <?= htmlspecialchars($profile["employeeId"] ?? $employeeId) ?>
-                    <?php if (!empty($profile["department"])): ?>
-                        · <?= htmlspecialchars($profile["department"]) ?>
-                    <?php endif; ?>
-                    <?php if (!empty($profile["role"])): ?>
-                        · <?= htmlspecialchars($profile["role"]) ?>
-                    <?php endif; ?>
+                    <?php if (!empty($profile["department"])): ?> · <?= htmlspecialchars($profile["department"]) ?><?php endif; ?>
+                    <?php if (!empty($profile["role"])): ?> · <?= htmlspecialchars($profile["role"]) ?><?php endif; ?>
                 </p>
             </div>
-
             <a class="action-link" href="employees.php">Back to Employees</a>
         </header>
 
@@ -101,17 +94,18 @@ function profileTime(?string $timestamp): string
             $statusLabel = $status === "IN"
                 ? "Present"
                 : ($status === "OUT" ? "Clocked Out" : "Not Seen Today");
+
+            $punctuality = strtoupper($profile["punctualityStatus"] ?? "NOT_SEEN");
+            $punctualityLabel = $punctuality === "ON_TIME"
+                ? "On Time"
+                : ($punctuality === "LATE" ? "Late" : "Not Seen");
             ?>
 
             <section class="grid kpi-grid">
                 <article class="kpi-card">
                     <p class="kpi-label">Current Status</p>
-                    <p class="kpi-value" style="font-size:1.45rem;">
-                        <?= htmlspecialchars($statusLabel) ?>
-                    </p>
-                    <p class="kpi-meta">
-                        <?= !empty($profile["active"]) ? "Active employee" : "Inactive employee" ?>
-                    </p>
+                    <p class="kpi-value" style="font-size:1.45rem;"><?= htmlspecialchars($statusLabel) ?></p>
+                    <p class="kpi-meta"><?= !empty($profile["active"]) ? "Active employee" : "Inactive employee" ?></p>
                 </article>
 
                 <article class="kpi-card">
@@ -120,6 +114,23 @@ function profileTime(?string $timestamp): string
                     <p class="kpi-meta">First IN event today</p>
                 </article>
 
+                <article class="kpi-card">
+                    <p class="kpi-label">Punctuality</p>
+                    <p class="kpi-value" style="font-size:1.45rem;"><?= htmlspecialchars($punctualityLabel) ?></p>
+                    <p class="kpi-meta">
+                        Shift <?= htmlspecialchars($profile["shiftStart"] ?? "08:00") ?>
+                        + <?= (int)($profile["graceMinutes"] ?? 15) ?> min grace
+                    </p>
+                </article>
+
+                <article class="kpi-card">
+                    <p class="kpi-label">Minutes Late</p>
+                    <p class="kpi-value"><?= (int)($profile["minutesLate"] ?? 0) ?></p>
+                    <p class="kpi-meta">Beyond the grace threshold</p>
+                </article>
+            </section>
+
+            <section class="grid kpi-grid">
                 <article class="kpi-card">
                     <p class="kpi-label">Completed Hours</p>
                     <p class="kpi-value"><?= number_format((float)($profile["completedHoursToday"] ?? 0), 1) ?>h</p>
@@ -133,13 +144,28 @@ function profileTime(?string $timestamp): string
                             ? number_format((float)($profile["openSessionHours"] ?? 0), 1) . "h"
                             : "--" ?>
                     </p>
-                    <p class="kpi-meta">
-                        <?= !empty($profile["hasOpenSession"])
-                            ? "Still clocked in"
-                            : "No open work session" ?>
-                    </p>
+                    <p class="kpi-meta"><?= !empty($profile["hasOpenSession"]) ? "Still clocked in" : "No open work session" ?></p>
+                </article>
+
+                <article class="kpi-card">
+                    <p class="kpi-label">Last Event</p>
+                    <p class="kpi-value" style="font-size:1.45rem;"><?= htmlspecialchars($profile["lastEventToday"] ?? "--") ?></p>
+                    <p class="kpi-meta">Latest attendance event today</p>
+                </article>
+
+                <article class="kpi-card">
+                    <p class="kpi-label">Record Status</p>
+                    <p class="kpi-value" style="font-size:1.45rem;"><?= !empty($profile["active"]) ? "Active" : "Inactive" ?></p>
+                    <p class="kpi-meta">Employee access state</p>
                 </article>
             </section>
+
+            <?php if ($punctuality === "LATE"): ?>
+                <div class="notice error">
+                    <strong>Late arrival signal.</strong>
+                    First arrival was <?= (int)($profile["minutesLate"] ?? 0) ?> minutes beyond the current grace threshold.
+                </div>
+            <?php endif; ?>
 
             <section class="panel">
                 <div class="panel-header">
@@ -156,20 +182,11 @@ function profileTime(?string $timestamp): string
                 <?php else: ?>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                            <tr>
-                                <th>Event</th>
-                                <th>Date / Time</th>
-                            </tr>
-                            </thead>
+                            <thead><tr><th>Event</th><th>Date / Time</th></tr></thead>
                             <tbody>
                             <?php foreach ($recent as $event): ?>
                                 <tr>
-                                    <td>
-                                        <span class="badge <?= strtolower($event["action"] ?? "") ?>">
-                                            <?= htmlspecialchars($event["action"] ?? "--") ?>
-                                        </span>
-                                    </td>
+                                    <td><span class="badge <?= strtolower($event["action"] ?? "") ?>"><?= htmlspecialchars($event["action"] ?? "--") ?></span></td>
                                     <td><?= htmlspecialchars(profileTime($event["timestamp"] ?? null)) ?></td>
                                 </tr>
                             <?php endforeach; ?>
