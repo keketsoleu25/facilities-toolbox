@@ -12,8 +12,8 @@ namespace FacilitiesApi.Controllers;
 // --------------------------------------------------
 //
 // Read-only operational drill-down for one employee.
-// Route:
-// GET /api/employee-profiles/{employeeId}
+// v0.3 now prefers the employee's active shift assignment
+// when calculating punctuality.
 // --------------------------------------------------
 
 [ApiController]
@@ -58,6 +58,49 @@ public class EmployeeProfilesController : ControllerBase
         var zone = GetSouthAfricaTimeZone();
         var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone);
         var today = now.Date;
+        var todayDateOnly = DateOnly.FromDateTime(today);
+
+        // --------------------------------------------------
+        // Resolve today's assigned shift
+        // --------------------------------------------------
+        //
+        // An assignment is valid when it is active, has started,
+        // and has either no end date or ends on/after today.
+        // Newest matching assignment wins.
+        // --------------------------------------------------
+
+        var shiftAssignment = await _database
+            .ShiftAssignments
+            .AsNoTracking()
+            .Include(item => item.Shift)
+            .Where(item =>
+                item.EmployeeId == employeeId &&
+                item.Active &&
+                item.EffectiveFrom <= todayDateOnly &&
+                (!item.EffectiveTo.HasValue || item.EffectiveTo.Value >= todayDateOnly)
+            )
+            .OrderByDescending(item => item.EffectiveFrom)
+            .FirstOrDefaultAsync();
+
+        var defaultShiftStart = ParseTime(
+            _shiftPolicy.StartTime,
+            new TimeSpan(8, 0, 0)
+        );
+
+        var shiftStart = shiftAssignment?.Shift.StartTime
+            ?? defaultShiftStart;
+
+        var shiftEnd = shiftAssignment?.Shift.EndTime
+            ?? new TimeSpan(17, 0, 0);
+
+        var graceMinutes = shiftAssignment?.Shift.GraceMinutes
+            ?? Math.Max(0, _shiftPolicy.GraceMinutes);
+
+        var shiftCode = shiftAssignment?.Shift.ShiftCode
+            ?? string.Empty;
+
+        var shiftName = shiftAssignment?.Shift.Name
+            ?? "Default Shift Policy";
 
         var todayRecords = records
             .Select(record => new
@@ -103,15 +146,9 @@ public class EmployeeProfilesController : ControllerBase
             openSession.HasValue;
 
         // --------------------------------------------------
-        // Configurable punctuality rule
+        // Shift-aware punctuality
         // --------------------------------------------------
 
-        var shiftStart = ParseTime(
-            _shiftPolicy.StartTime,
-            new TimeSpan(8, 0, 0)
-        );
-
-        var graceMinutes = Math.Max(0, _shiftPolicy.GraceMinutes);
         var lateThreshold = shiftStart.Add(
             TimeSpan.FromMinutes(graceMinutes)
         );
@@ -160,7 +197,10 @@ public class EmployeeProfilesController : ControllerBase
                     2
                 )
                 : 0,
+            ShiftCode = shiftCode,
+            ShiftName = shiftName,
             ShiftStart = shiftStart.ToString(@"hh\:mm"),
+            ShiftEnd = shiftEnd.ToString(@"hh\:mm"),
             GraceMinutes = graceMinutes,
             PunctualityStatus = punctualityStatus,
             MinutesLate = minutesLate,
