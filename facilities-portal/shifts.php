@@ -74,6 +74,7 @@ foreach ([$shiftResult, $assignmentResult, $employeeResult] as $result) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shifts | Facilities Toolbox</title>
     <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/theme.js"></script>
 </head>
 <body>
 <div class="app-shell">
