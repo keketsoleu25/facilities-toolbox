@@ -4,8 +4,9 @@
 // Facilities Toolbox - Employee Management
 // --------------------------------------------------
 //
-// Employee CRUD actions are sent to the ASP.NET Core
-// API. PHP remains a presentation layer only.
+// Employee commands are sent to the ASP.NET Core API.
+// PHP remains responsible only for presentation and
+// user interaction.
 // --------------------------------------------------
 
 require_once __DIR__ . '/api-client.php';
@@ -14,30 +15,24 @@ $employees = [];
 $errorMessage = null;
 $successMessage = null;
 
-// --------------------------------------------------
-// Handle employee commands
-// --------------------------------------------------
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formAction = $_POST['form_action'] ?? '';
 
     if ($formAction === 'create') {
-        $result = facilitiesApiRequest(
-            'POST',
-            '/api/employees',
-            [
-                'employeeId' => trim($_POST['employee_id'] ?? ''),
-                'name' => trim($_POST['name'] ?? ''),
-                'department' => trim($_POST['department'] ?? ''),
-                'role' => trim($_POST['role'] ?? '')
-            ]
-        );
+        $result = facilitiesApiRequest('POST', '/api/employees', [
+            'employeeId' => trim($_POST['employee_id'] ?? ''),
+            'name' => trim($_POST['name'] ?? ''),
+            'department' => trim($_POST['department'] ?? ''),
+            'role' => trim($_POST['role'] ?? '')
+        ]);
 
-        if ($result['success']) {
-            $successMessage = 'Employee created successfully.';
-        } else {
-            $errorMessage = $result['message'];
-        }
+        $successMessage = $result['success']
+            ? 'Employee created successfully.'
+            : null;
+
+        $errorMessage = $result['success']
+            ? null
+            : $result['message'];
     }
 
     if ($formAction === 'status') {
@@ -50,19 +45,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ['active' => $active]
         );
 
-        if ($result['success']) {
-            $successMessage = $active
-                ? "$employeeId activated."
-                : "$employeeId deactivated.";
-        } else {
-            $errorMessage = $result['message'];
-        }
+        $successMessage = $result['success']
+            ? ($active ? "$employeeId activated." : "$employeeId deactivated.")
+            : null;
+
+        $errorMessage = $result['success']
+            ? null
+            : $result['message'];
     }
 }
-
-// --------------------------------------------------
-// Load current employee directory
-// --------------------------------------------------
 
 $result = facilitiesApiRequest('GET', '/api/employees');
 
@@ -78,103 +69,116 @@ if ($result['success'] && is_array($result['data'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employees - Facilities Toolbox</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 32px 20px; font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; }
-        .container { max-width: 1150px; margin: 0 auto; }
-        nav { display: flex; gap: 18px; margin-bottom: 28px; }
-        nav a { color: #111827; text-decoration: none; font-weight: 700; }
-        .card { background: #fff; border-radius: 14px; padding: 24px; margin-bottom: 24px; box-shadow: 0 8px 28px rgba(17, 24, 39, .06); }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
-        input { width: 100%; padding: 11px; border: 1px solid #d1d5db; border-radius: 8px; }
-        button { padding: 10px 14px; border: 0; border-radius: 8px; cursor: pointer; font-weight: 700; }
-        .primary { background: #111827; color: white; }
-        .activate { background: #dcfce7; }
-        .deactivate { background: #fee2e2; }
-        .success, .error { padding: 12px 14px; border-radius: 8px; margin-bottom: 18px; }
-        .success { background: #dcfce7; }
-        .error { background: #fee2e2; }
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 760px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-        th { background: #f9fafb; }
-        .muted { color: #6b7280; }
-    </style>
+    <title>Employees | Facilities Toolbox</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/theme.js"></script>
 </head>
 <body>
-<div class="container">
-    <nav>
-        <a href="index.php">Dashboard</a>
-        <a href="employees.php">Employees</a>
-    </nav>
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">FT</div>
+            <h1>Facilities Toolbox</h1>
+            <p>The Tech Alchemy Lab</p>
+        </div>
 
-    <h1>Employee Management</h1>
-    <p class="muted">Manage staff records through the Facilities API.</p>
+        <div class="nav-section-label">Operations</div>
+        <nav>
+            <a class="nav-link" href="index.php">Dashboard</a>
+            <a class="nav-link active" href="employees.php">Employees</a>
+            <a class="nav-link" href="attendance.php">Attendance</a>
+            <a class="nav-link" href="reports.php">Reports</a>
+        </nav>
 
-    <?php if ($successMessage): ?>
-        <div class="success"><?= e($successMessage) ?></div>
-    <?php endif; ?>
+        <div class="nav-section-label">Facilities</div>
+        <nav>
+            <a class="nav-link" href="structure.php">Structure</a>
+            <a class="nav-link" href="shifts.php">Shifts</a>
+            <a class="nav-link" href="assets.php">Assets</a>
+            <a class="nav-link" href="maintenance.php">Maintenance</a>
+        </nav>
 
-    <?php if ($errorMessage): ?>
-        <div class="error"><?= e($errorMessage) ?></div>
-    <?php endif; ?>
+        <div class="sidebar-footer">v0.3 Operations Core</div>
+    </aside>
 
-    <div class="card">
-        <h2>Add Employee</h2>
-        <form method="POST" class="form-grid">
-            <input type="hidden" name="form_action" value="create">
-            <input type="text" name="employee_id" placeholder="EMP003" required>
-            <input type="text" name="name" placeholder="Employee name" required>
-            <input type="text" name="department" placeholder="Department">
-            <input type="text" name="role" placeholder="Role">
-            <button type="submit" class="primary">Add Employee</button>
-        </form>
-    </div>
-
-    <div class="card">
-        <h2>Employee Directory</h2>
-
-        <?php if (!$employees): ?>
-            <p>No employees found.</p>
-        <?php else: ?>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Employee ID</th>
-                        <th>Name</th>
-                        <th>Department</th>
-                        <th>Role</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($employees as $employee): ?>
-                        <tr>
-                            <td><?= e($employee['employeeId'] ?? '') ?></td>
-                            <td><?= e($employee['name'] ?? '') ?></td>
-                            <td><?= e($employee['department'] ?? '') ?></td>
-                            <td><?= e($employee['role'] ?? '') ?></td>
-                            <td><?= !empty($employee['active']) ? 'Active' : 'Inactive' ?></td>
-                            <td>
-                                <form method="POST">
-                                    <input type="hidden" name="form_action" value="status">
-                                    <input type="hidden" name="employee_id" value="<?= e($employee['employeeId'] ?? '') ?>">
-                                    <input type="hidden" name="active" value="<?= !empty($employee['active']) ? '0' : '1' ?>">
-                                    <button type="submit" class="<?= !empty($employee['active']) ? 'deactivate' : 'activate' ?>">
-                                        <?= !empty($employee['active']) ? 'Deactivate' : 'Activate' ?>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+    <main class="main">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Workforce Directory</p>
+                <h2 class="page-title">Employee Management</h2>
+                <p class="page-subtitle">Manage staff records and employment status through the Facilities API.</p>
             </div>
+            <span class="status-pill"><?= count($employees) ?> Records Loaded</span>
+        </header>
+
+        <?php if ($successMessage): ?>
+            <div class="notice success"><?= e($successMessage) ?></div>
         <?php endif; ?>
-    </div>
+
+        <?php if ($errorMessage): ?>
+            <div class="notice error"><?= e($errorMessage) ?></div>
+        <?php endif; ?>
+
+        <section class="panel" style="margin-bottom:18px;">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title">Add Employee</h3>
+                    <p class="panel-description">Create a workforce record in the Facilities platform.</p>
+                </div>
+            </div>
+
+            <form method="POST" class="form-grid">
+                <input type="hidden" name="form_action" value="create">
+                <div class="field"><label>Employee ID</label><input type="text" name="employee_id" placeholder="EMP003" required></div>
+                <div class="field"><label>Name</label><input type="text" name="name" placeholder="Employee name" required></div>
+                <div class="field"><label>Department</label><input type="text" name="department" placeholder="Department"></div>
+                <div class="field"><label>Role</label><input type="text" name="role" placeholder="Role"></div>
+                <div style="display:flex;align-items:end;"><button type="submit" class="button primary">Add Employee</button></div>
+            </form>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title">Employee Directory</h3>
+                    <p class="panel-description"><?= count($employees) ?> workforce records available.</p>
+                </div>
+            </div>
+
+            <?php if (!$employees): ?>
+                <div class="empty-state">No employees found.</div>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Role</th><th>Status</th><th>Action</th></tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($employees as $employee): ?>
+                            <tr>
+                                <td><strong><?= e($employee['employeeId'] ?? '') ?></strong></td>
+                                <td><?= e($employee['name'] ?? '') ?></td>
+                                <td><?= e($employee['department'] ?? '') ?></td>
+                                <td><?= e($employee['role'] ?? '') ?></td>
+                                <td><span class="badge <?= !empty($employee['active']) ? 'active' : 'inactive' ?>"><?= !empty($employee['active']) ? 'Active' : 'Inactive' ?></span></td>
+                                <td>
+                                    <form method="POST">
+                                        <input type="hidden" name="form_action" value="status">
+                                        <input type="hidden" name="employee_id" value="<?= e($employee['employeeId'] ?? '') ?>">
+                                        <input type="hidden" name="active" value="<?= !empty($employee['active']) ? '0' : '1' ?>">
+                                        <button type="submit" class="button <?= !empty($employee['active']) ? 'danger' : 'success' ?>">
+                                            <?= !empty($employee['active']) ? 'Deactivate' : 'Activate' ?>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </section>
+    </main>
 </div>
 </body>
 </html>
