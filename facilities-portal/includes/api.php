@@ -4,34 +4,36 @@
 // Facilities Toolbox - Shared API Client
 // --------------------------------------------------
 //
-// All PHP portal pages communicate with the C# API
-// through this helper. The PHP layer never connects
-// directly to PostgreSQL.
+// All PHP portal pages communicate with the C#
+// Facilities API through this shared helper.
 //
-// Keeping HTTP logic in one place prevents every page
-// from reimplementing timeouts, JSON parsing and error
-// handling independently.
+// The PHP portal never connects directly to PostgreSQL.
+// All database operations go through the ASP.NET Core
+// API.
+//
+// Centralising HTTP communication here prevents portal
+// pages from duplicating request, timeout, JSON parsing
+// and error-handling logic.
 // --------------------------------------------------
 
 
 // --------------------------------------------------
-// API base URL
+// Load portal configuration
 // --------------------------------------------------
 //
-// Local development currently runs ASP.NET Core on
-// port 5209.
+// config.php provides $apiBaseUrl.
 //
-// We use the explicit IPv4 loopback address instead of
-// "localhost" because some Windows/PHP combinations can
-// resolve localhost to IPv6 first while Kestrel is only
-// listening on IPv4. Using 127.0.0.1 keeps portal-to-API
-// communication deterministic during local development.
+// Local development:
+//   http://localhost:5209
 //
-// This can later move into environment configuration when
-// the product is deployed.
+// Docker:
+//   FACILITIES_API_BASE_URL=http://facilities-api:8080
+//
+// This keeps environment-specific addresses outside
+// the application logic.
 // --------------------------------------------------
 
-const FACILITIES_API_BASE_URL = "http://127.0.0.1:5209";
+require_once __DIR__ . '/../config.php';
 
 
 // --------------------------------------------------
@@ -42,8 +44,8 @@ const FACILITIES_API_BASE_URL = "http://127.0.0.1:5209";
 //
 // [
 //     "success" => bool,
-//     "status" => int,
-//     "data" => mixed,
+//     "status"  => int,
+//     "data"    => mixed,
 //     "message" => ?string
 // ]
 // --------------------------------------------------
@@ -54,13 +56,21 @@ function facilitiesApiRequest(
     ?array $payload = null
 ): array {
 
-    // Build the complete endpoint URL.
-    $url =
-        FACILITIES_API_BASE_URL
-        . $path;
+    // Use the API base URL loaded from config.php.
+    global $apiBaseUrl;
 
 
-    // Configure PHP's HTTP stream client.
+    // --------------------------------------------------
+    // Build endpoint URL
+    // --------------------------------------------------
+
+    $url = $apiBaseUrl . $path;
+
+
+    // --------------------------------------------------
+    // Configure HTTP request
+    // --------------------------------------------------
+
     $options = [
         "http" => [
             "method" => strtoupper($method),
@@ -71,8 +81,10 @@ function facilitiesApiRequest(
     ];
 
 
-    // Only send a body when a request actually has
-    // payload data.
+    // --------------------------------------------------
+    // Add JSON body when required
+    // --------------------------------------------------
+
     if ($payload !== null) {
         $options["http"]["content"] =
             json_encode($payload);
@@ -83,6 +95,10 @@ function facilitiesApiRequest(
         stream_context_create($options);
 
 
+    // --------------------------------------------------
+    // Send request
+    // --------------------------------------------------
+
     $response =
         @file_get_contents(
             $url,
@@ -91,8 +107,10 @@ function facilitiesApiRequest(
         );
 
 
-    // A false response means PHP could not reach the
-    // ASP.NET Core API at all.
+    // --------------------------------------------------
+    // Handle API connection failure
+    // --------------------------------------------------
+
     if ($response === false) {
         return [
             "success" => false,
@@ -103,9 +121,10 @@ function facilitiesApiRequest(
     }
 
 
-    // Default to 200 when no response status header is
-    // available. Normally PHP populates this header for
-    // every HTTP response.
+    // --------------------------------------------------
+    // Determine HTTP status code
+    // --------------------------------------------------
+
     $statusCode = 200;
 
     if (
@@ -116,18 +135,24 @@ function facilitiesApiRequest(
             $matches
         )
     ) {
-        $statusCode =
-            (int) $matches[1];
+        $statusCode = (int) $matches[1];
     }
 
 
-    // Decode JSON responses from ASP.NET Core.
+    // --------------------------------------------------
+    // Decode JSON response
+    // --------------------------------------------------
+
     $data =
         json_decode(
             $response,
             true
         );
 
+
+    // --------------------------------------------------
+    // Determine request success
+    // --------------------------------------------------
 
     $success =
         $statusCode >= 200 &&
@@ -144,9 +169,15 @@ function facilitiesApiRequest(
     }
 
 
-    // ASP.NET Core error responses currently expose an
-    // "error" property. Fall back to a generic message
-    // so the UI always has something useful to display.
+    // --------------------------------------------------
+    // Handle API error response
+    // --------------------------------------------------
+    //
+    // ASP.NET Core error responses may expose an
+    // "error" property. If none exists, return a safe
+    // generic message for the portal.
+    // --------------------------------------------------
+
     return [
         "success" => false,
         "status" => $statusCode,
