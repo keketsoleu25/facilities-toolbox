@@ -1,0 +1,64 @@
+services:
+  facilities-db:
+    image: postgres:16-alpine
+    container_name: facilities-db-container
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: facilities
+      POSTGRES_USER: facilities
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - facilities-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U facilities -d facilities"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  facilities-api:
+    build:
+      context: ./facilities-api
+      dockerfile: Dockerfile
+    image: facilities-api:v0.1
+    container_name: facilities-api-container
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__FacilitiesDatabase: Host=facilities-db;Port=5432;Database=facilities;Username=facilities;Password=${POSTGRES_PASSWORD}
+    depends_on:
+      facilities-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "grep -qi ':1F90' /proc/net/tcp /proc/net/tcp6 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  facilities-portal:
+    build:
+      context: ./facilities-portal
+      dockerfile: Dockerfile
+    image: facilities-portal:v0.1
+    container_name: facilities-portal-container
+    ports:
+      - "8081:80"
+    environment:
+      FACILITIES_API_BASE_URL: http://facilities-api:8080
+    depends_on:
+      facilities-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@file_get_contents(\"http://localhost/\") === false ? 1 : 0);'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  facilities-postgres-data:

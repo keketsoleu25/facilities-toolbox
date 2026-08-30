@@ -67,9 +67,20 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// --------------------------------------------------
-// Map API controllers and start server
-// --------------------------------------------------
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<FacilitiesDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+app.MapGet("/health", async (FacilitiesDbContext db, CancellationToken cancellationToken) =>
+{
+    var connected = await db.Database.CanConnectAsync(cancellationToken);
+
+    return connected
+        ? Results.Ok(new { status = "healthy" })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+});
 
 app.MapControllers();
 app.Run();
