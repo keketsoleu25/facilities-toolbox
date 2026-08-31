@@ -37,7 +37,6 @@ Facilities + workforce operations platform
 ## Current capabilities
 
 ### Workforce operations
-
 - Employee administration
 - Attendance capture and history
 - IN/OUT attendance rules
@@ -46,40 +45,24 @@ Facilities + workforce operations platform
 - Operational alerts
 
 ### Workforce scheduling
-
 - Shift definitions
 - Employee shift assignments
 - Assignment history
 - Configurable shift policies
 
 ### Facilities structure
-
 - Sites
 - Buildings
 - Departments
 
 ### Asset and maintenance operations
-
 - Asset register foundation
 - Maintenance requests
 - Work orders
 - Inspections
 
 ### Operations intelligence
-
-The dashboard can surface information such as:
-
-- total and active employees;
-- employees currently present;
-- clocked-out and absent employees;
-- attendance events;
-- attendance rate;
-- hours worked;
-- average first arrival;
-- open attendance sessions;
-- recent activity;
-- department summaries; and
-- attendance trends.
+The dashboard can surface total and active employees, present/clocked-out/absent states, attendance events and rates, hours worked, first-arrival information, open sessions, recent activity, department summaries and attendance trends.
 
 ---
 
@@ -104,8 +87,6 @@ The dashboard can surface information such as:
                         v
                      PostgreSQL
 ```
-
-### Technology responsibilities
 
 | Technology | Responsibility |
 | --- | --- |
@@ -135,6 +116,9 @@ facilities-toolbox/
 |   |-- Services/
 |   `-- Dockerfile
 |
+|-- facilities-api.Tests/    # xUnit business-rule tests
+|   `-- AttendanceServiceTests.cs
+|
 |-- facilities-portal/       # PHP operations portal
 |   |-- assets/
 |   |-- api-client.php
@@ -143,22 +127,50 @@ facilities-toolbox/
 |   `-- *.php workspaces
 |
 |-- recognition-service/     # Python/OpenCV recognition work
-|
+|-- .github/workflows/ci.yml # build/test workflow
 |-- compose.yaml             # Local multi-service orchestration
 |-- .env.example             # Safe local configuration template
 |-- docs/
 |   |-- ARCHITECTURE.md
 |   `-- DEVELOPMENT.md
-|
 `-- README.md
 ```
+
+---
+
+## Automated testing
+
+The API now has an xUnit test project focused first on attendance business rules because attendance is one of the system's earliest and most important operational workflows.
+
+Current tests verify that the service:
+
+- rejects blank employee IDs;
+- rejects unsupported attendance actions;
+- rejects unknown employees;
+- rejects inactive employees;
+- normalises valid input before persistence;
+- prevents duplicate `IN → IN` and `OUT → OUT` states; and
+- allows valid alternating `IN → OUT` transitions.
+
+Run the tests from the repository root:
+
+```bash
+dotnet test facilities-api.Tests/facilities-api.Tests.csproj
+```
+
+The test project uses EF Core's in-memory provider to isolate service-level business rules. PostgreSQL-backed integration tests remain a future step for persistence-specific behaviour.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` defines a GitHub Actions workflow that restores the API and test projects, builds the API in Release mode, runs the xUnit suite and collects XPlat code-coverage output.
+
+The workflow is intentionally narrow: it proves the API/test path first rather than presenting unfinished deployment automation as production CI/CD.
 
 ---
 
 ## Run with Docker — recommended
 
 ### Prerequisites
-
 - Docker Desktop or another Docker Engine with Compose support
 - Git
 
@@ -223,8 +235,6 @@ For troubleshooting, rebuilding, logs and manual development, see [`docs/DEVELOP
 
 ## Manual local development
 
-Docker is the recommended way to run the complete stack, but the API and portal can also be run separately during development.
-
 ### ASP.NET Core API
 
 ```powershell
@@ -241,8 +251,6 @@ dotnet user-secrets set "ConnectionStrings:FacilitiesDatabase" "YOUR_POSTGRES_CO
 ```
 
 ### PHP portal
-
-From the repository root:
 
 ```powershell
 php -S localhost:8080 -t facilities-portal
@@ -274,8 +282,6 @@ Review migrations before applying them to an important environment.
 
 ## Engineering principles
 
-The project has adopted several rules as it evolved:
-
 1. Business rules belong in backend services, not in the camera or portal.
 2. Credentials and environment-specific values do not belong in source control.
 3. Operational policies should be configurable instead of duplicated as magic values.
@@ -284,12 +290,11 @@ The project has adopted several rules as it evolved:
 6. Containers should communicate through service names rather than host-specific addresses.
 7. A working prototype should be refactored when responsibilities become clear.
 8. Operational software should surface decisions and exceptions, not only raw records.
+9. Core business rules should be protected by automated tests as the system grows.
 
 ---
 
 ## Docker status
-
-The current Compose environment containerises the core local application path:
 
 ```text
 Browser
@@ -301,17 +306,20 @@ ASP.NET Core container :8080
 PostgreSQL container :5432
 ```
 
-The Python recognition service remains a separate integration layer and is **not currently part of the default Compose stack**.
-
-This is intentional: the current Docker milestone proves the core portal → API → database path without forcing the webcam/computer-vision workflow into the same runtime prematurely.
+The Python recognition service remains a separate integration layer and is **not currently part of the default Compose stack**. This keeps the current Docker milestone focused on the core portal → API → database path without forcing the webcam/computer-vision workflow into the same runtime prematurely.
 
 ---
 
 ## Roadmap
 
-The existing foundation can support later work such as authentication and role-based access control, richer maintenance lifecycles, contractor management, compliance workflows, notifications, deeper asset history, production deployment and tighter recognition-service integration.
+The next engineering improvements are deliberately depth-first rather than feature-first:
 
-These are future directions rather than requirements for the current v0.3 milestone.
+- expand service and API integration tests;
+- add PostgreSQL-backed integration coverage where persistence behaviour matters;
+- strengthen authentication and role-based access control;
+- improve structured logging and observability;
+- establish a reliable deployment path after local/container behaviour is stable;
+- continue maintenance, contractor and compliance workflows only when they add clear operational value.
 
 ---
 
@@ -319,21 +327,7 @@ These are future directions rather than requirements for the current v0.3 milest
 
 **v0.3 Operations Core is on `main`.**
 
-The current focus is a stable, documented system rather than adding infrastructure for its own sake.
-
-```text
-Attendance prototype
-        ↓
-Workforce operations
-        ↓
-Facilities intelligence
-        ↓
-Asset and maintenance operations
-        ↓
-Modular Facilities Management Toolbox
-```
-
----
+The current focus is a stable, tested and documented system rather than adding infrastructure for its own sake.
 
 ### The Tech Alchemy Lab
 
