@@ -1,0 +1,43 @@
+name: Facilities Toolbox CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'facilities-api/**'
+      - 'facilities-api.Tests/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'facilities-api/**'
+      - 'facilities-api.Tests/**'
+      - '.github/workflows/ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore API
+        run: dotnet restore facilities-api/facilities-api.csproj
+
+      - name: Restore tests
+        run: dotnet restore facilities-api.Tests/facilities-api.Tests.csproj
+
+      - name: Build API
+        run: dotnet build facilities-api/facilities-api.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test facilities-api.Tests/facilities-api.Tests.csproj --configuration Release --no-restore --verbosity normal --collect:"XPlat Code Coverage"
