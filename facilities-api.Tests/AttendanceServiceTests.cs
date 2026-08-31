@@ -2,6 +2,7 @@ using FacilitiesApi.Data;
 using FacilitiesApi.Models;
 using FacilitiesApi.Services;
 using Microsoft.EntityFrameworkCore;
+using Xunit;
 
 namespace FacilitiesApi.Tests;
 
