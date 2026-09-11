@@ -6,6 +6,16 @@
 
 The system connects workforce attendance, operational intelligence, sites and buildings, shifts, assets, maintenance requests, work orders and inspections behind a central ASP.NET Core API.
 
+## Recruiter snapshot
+
+- **Backend:** C# + ASP.NET Core REST API with business services and controllers
+- **Data:** Entity Framework Core + PostgreSQL with tracked migrations
+- **Frontend / operations portal:** PHP + HTML/CSS/JavaScript
+- **Computer vision:** Python + OpenCV attendance-recognition work
+- **DevOps:** Docker Compose + GitHub Actions CI
+- **Testing:** xUnit coverage for core attendance business rules
+- **Architecture:** multi-service design with the API as the source of business logic
+
 **Current milestone: v0.3 — Operations Core**
 
 ---
